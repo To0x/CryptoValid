@@ -48,10 +48,10 @@ public class CryptoHandler {
 		}
 	}
 	
-	public SecretKey generateAESKey(int keySize)
+	public SecretKey generateBlockCipherKey(String algorithm, int keySize)
 	{
 		try{
-			KeyGenerator kgen = KeyGenerator.getInstance("AES");
+			KeyGenerator kgen = KeyGenerator.getInstance(algorithm);
 			kgen.init(keySize);
 			return kgen.generateKey();
 		}
@@ -60,16 +60,26 @@ public class CryptoHandler {
 		}
 	}
 	
-	public void decryptAESwithIV(String modeAndPadding, String fileName, SecretKey key, IvParameterSpec iv) throws Exception
+	private void decryptBlockCipher(String algorithm, String modeAndPadding, String fileName, SecretKey key, IvParameterSpec iv) throws Exception
 	{
 		CipherInputStream cis;
 		FileInputStream fis;
 		FileOutputStream fos;
 		
+		String cipherAlgo = algorithm;
+		if (modeAndPadding.length() < 1)
+		{
+			cipherAlgo = String.format("%s/%s", algorithm, modeAndPadding);
+		}
+		
 		// generate cipher
 		File sdCard = Environment.getExternalStorageDirectory();
-		Cipher cipDecrypt = Cipher.getInstance(String.format("AES/%s", modeAndPadding));
-		cipDecrypt.init(Cipher.DECRYPT_MODE, key, iv);
+		Cipher cipDecrypt = Cipher.getInstance(cipherAlgo);
+		
+		if (iv == null)
+			cipDecrypt.init(Cipher.DECRYPT_MODE, key, iv);
+		else
+			cipDecrypt.init(Cipher.DECRYPT_MODE, key);
 		
 
 		fis = new FileInputStream(new File(sdCard, String.format("TEST/%sEnc",fileName)));
@@ -90,23 +100,31 @@ public class CryptoHandler {
 		fis.close();
 	}
 	
-	public IvParameterSpec encryptAESWithIV(String modeAndPadding, String fileName, SecretKey key) throws Exception
-	{
+	private IvParameterSpec encryptBlockCipher(String algorithm, String modeAndPadding, String fileName, SecretKey key, boolean withIV) throws Exception {
 		FileInputStream fis;
 		FileOutputStream fos;
 		CipherOutputStream cos;
-
 		
 		File sdCard = Environment.getExternalStorageDirectory();
 		File fileInput = new File(sdCard, String.format("TEST/%s",fileName));
 		File fileOutput = new File(sdCard, String.format("TEST/%sEnc", fileName));
 		
+		String cipherAlgo = algorithm;
+		if (modeAndPadding.length() < 1)
+		{
+			cipherAlgo = String.format("%s/%s", algorithm, modeAndPadding);
+		}
+		
 		// generate Cipher
-		Cipher cipEncrypt = Cipher.getInstance(String.format("AES/%s", modeAndPadding));		
+		Cipher cipEncrypt = Cipher.getInstance(cipherAlgo);		
         final byte[] ivData = new byte[cipEncrypt.getBlockSize()];
         rnd.nextBytes(ivData);
         final IvParameterSpec iv = new IvParameterSpec(ivData);
-        cipEncrypt.init(Cipher.ENCRYPT_MODE, key, iv);
+        
+        if (withIV)
+        	cipEncrypt.init(Cipher.ENCRYPT_MODE, key, iv);
+        else
+        	cipEncrypt.init(Cipher.ENCRYPT_MODE, key);
         
 		if (!fileInput.exists())
 			fileInput.createNewFile();
@@ -136,6 +154,23 @@ public class CryptoHandler {
 		fis.close();
 		
 		return iv;
+	}
+	
+	public void decryptBlockCipherWithIV(String algorithm, String modeAndPadding, String fileName, SecretKey key, IvParameterSpec iv) throws Exception {
+		decryptBlockCipher(algorithm, modeAndPadding, fileName, key, iv);
+	}
+	
+	public void decryptBlockCipherWihtoutIV(String algorithm, String modeAndPadding, String fileName, SecretKey key) throws Exception {
+		decryptBlockCipher(algorithm, modeAndPadding, fileName, key, null);
+	}
+	
+	public IvParameterSpec encryptBlockCipherWithIV(String algorithm, String modeAndPadding, String fileName, SecretKey key) throws Exception
+	{
+		return this.encryptBlockCipher(algorithm, modeAndPadding, fileName, key, true);
+	}
+	
+	public void encryptBlockCipherWihtoutIV(String algorithm, String modeAndPadding, String fileName, SecretKey key) throws Exception {
+		this.encryptBlockCipher(algorithm, modeAndPadding, fileName, key, false);
 	}
 	
 	/*
