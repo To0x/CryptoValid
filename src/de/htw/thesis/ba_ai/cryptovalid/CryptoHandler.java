@@ -48,7 +48,7 @@ public class CryptoHandler {
 		}
 	}
 	
-	public SecretKey generateKey(int keySize)
+	public SecretKey generateAESKey(int keySize)
 	{
 		try{
 			KeyGenerator kgen = KeyGenerator.getInstance("AES");
@@ -60,7 +60,7 @@ public class CryptoHandler {
 		}
 	}
 	
-	public void decryptAESwithIV(String mode, String padding, String fileName, SecretKey key, IvParameterSpec iv) throws Exception
+	public void decryptAESwithIV(String modeAndPadding, String fileName, SecretKey key, IvParameterSpec iv) throws Exception
 	{
 		CipherInputStream cis;
 		FileInputStream fis;
@@ -68,7 +68,7 @@ public class CryptoHandler {
 		
 		// generate cipher
 		File sdCard = Environment.getExternalStorageDirectory();
-		Cipher cipDecrypt = Cipher.getInstance(String.format("AES/%s/%s", mode,padding));
+		Cipher cipDecrypt = Cipher.getInstance(String.format("AES/%s", modeAndPadding));
 		cipDecrypt.init(Cipher.DECRYPT_MODE, key, iv);
 		
 
@@ -78,7 +78,7 @@ public class CryptoHandler {
 
 		/// DECRYPT ///
 		int read;
-		byte[] buffer = new byte[1024];
+		byte[] buffer = new byte[cipDecrypt.getBlockSize()];
 		while ((read = cis.read(buffer)) != -1)
 		{
 			fos.write(buffer,0,read);
@@ -90,7 +90,7 @@ public class CryptoHandler {
 		fis.close();
 	}
 	
-	public IvParameterSpec encryptAESWithIV(String mode, String padding, String fileName, SecretKey key) throws Exception
+	public IvParameterSpec encryptAESWithIV(String modeAndPadding, String fileName, SecretKey key) throws Exception
 	{
 		FileInputStream fis;
 		FileOutputStream fos;
@@ -102,7 +102,7 @@ public class CryptoHandler {
 		File fileOutput = new File(sdCard, String.format("TEST/%sEnc", fileName));
 		
 		// generate Cipher
-		Cipher cipEncrypt = Cipher.getInstance(String.format("AES/%s/%s", mode,padding));		
+		Cipher cipEncrypt = Cipher.getInstance(String.format("AES/%s", modeAndPadding));		
         final byte[] ivData = new byte[cipEncrypt.getBlockSize()];
         rnd.nextBytes(ivData);
         final IvParameterSpec iv = new IvParameterSpec(ivData);
@@ -123,7 +123,7 @@ public class CryptoHandler {
 		
 		/// ENCRYPT ///
 		int read;
-		byte[] buffer = new byte[1024];
+		byte[] buffer = new byte[cipEncrypt.getBlockSize()];
 		
 		while ((read = fis.read(buffer)) != -1) 
 		{
