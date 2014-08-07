@@ -12,13 +12,18 @@ import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.PublicKey;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 
 import javax.crypto.Cipher;
 import javax.crypto.CipherInputStream;
 import javax.crypto.CipherOutputStream;
+import javax.crypto.KeyGenerator;
 import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 import android.os.Environment;
 import android.util.Log;
@@ -26,14 +31,114 @@ import android.util.Log;
 public class CryptoHandler {
 
 	private List<String> files;
+	private Timer t;
+	private  SecureRandom rnd;
 	
 	public CryptoHandler()
 	{
-		files = new ArrayList<String>();
-		files.add("5MB.zip");
-		files.add("20MB.zip");
+		try {
+			files = new ArrayList<String>();
+			files.add("5MB.zip");
+			files.add("20MB.zip");
+			
+			rnd = SecureRandom.getInstance("SHA1PRNG");
+		}
+		catch (Exception e) {
+			rnd = null;
+		}
 	}
 	
+	public SecretKey generateKey(int keySize)
+	{
+		try{
+			KeyGenerator kgen = KeyGenerator.getInstance("AES");
+			kgen.init(keySize);
+			return kgen.generateKey();
+		}
+		catch (Exception e) {
+			return null;
+		}
+	}
+	
+	public void decryptAESwithIV(String mode, String padding, String fileName, SecretKey key, IvParameterSpec iv) throws Exception
+	{
+		CipherInputStream cis;
+		FileInputStream fis;
+		FileOutputStream fos;
+		
+		// generate cipher
+		File sdCard = Environment.getExternalStorageDirectory();
+		Cipher cipDecrypt = Cipher.getInstance(String.format("AES/%s/%s", mode,padding));
+		cipDecrypt.init(Cipher.DECRYPT_MODE, key, iv);
+		
+
+		fis = new FileInputStream(new File(sdCard, String.format("TEST/%sEnc",fileName)));
+		fos = new FileOutputStream(new File(sdCard, String.format("TEST/%sDec",fileName)));
+		cis = new CipherInputStream(fis, cipDecrypt);
+
+		/// DECRYPT ///
+		int read;
+		byte[] buffer = new byte[1024];
+		while ((read = cis.read(buffer)) != -1)
+		{
+			fos.write(buffer,0,read);
+		}
+		
+		fos.flush();
+		fos.close();
+		cis.close();
+		fis.close();
+	}
+	
+	public IvParameterSpec encryptAESWithIV(String mode, String padding, String fileName, SecretKey key) throws Exception
+	{
+		FileInputStream fis;
+		FileOutputStream fos;
+		CipherOutputStream cos;
+
+		
+		File sdCard = Environment.getExternalStorageDirectory();
+		File fileInput = new File(sdCard, String.format("TEST/%s",fileName));
+		File fileOutput = new File(sdCard, String.format("TEST/%sEnc", fileName));
+		
+		// generate Cipher
+		Cipher cipEncrypt = Cipher.getInstance(String.format("AES/%s/%s", mode,padding));		
+        final byte[] ivData = new byte[cipEncrypt.getBlockSize()];
+        rnd.nextBytes(ivData);
+        final IvParameterSpec iv = new IvParameterSpec(ivData);
+        cipEncrypt.init(Cipher.ENCRYPT_MODE, key, iv);
+        
+		if (!fileInput.exists())
+			fileInput.createNewFile();
+		
+		if (!fileOutput.exists())
+			fileOutput.createNewFile();
+		
+		fis = new FileInputStream(fileInput);
+		fos = new FileOutputStream(fileOutput);
+		
+
+		cos = new CipherOutputStream(fos, cipEncrypt);
+				
+		
+		/// ENCRYPT ///
+		int read;
+		byte[] buffer = new byte[1024];
+		
+		while ((read = fis.read(buffer)) != -1) 
+		{
+			cos.write(buffer, 0 , read);
+		}
+		
+		cos.flush();
+		cos.close();
+		fos.close();
+		fis.close();
+		
+		return iv;
+	}
+	
+	/*
 	public void EncryptAES()
 	{
 		FileInputStream fis;
@@ -42,9 +147,7 @@ public class CryptoHandler {
 		CipherInputStream cis;
 		
 		
-		
 		try {
-			Timer t = new Timer();
 
 			File sdCard = Environment.getExternalStorageDirectory();
 			File fileInput = new File(sdCard, "TEST/20MB.zip");
@@ -82,7 +185,6 @@ public class CryptoHandler {
 			//byte[] encrypted = cip.doFinal(input);
 			
 			
-			t.startTimer();
 			/// ENCRYPT ///
 			int read;
 			byte[] buffer = new byte[1024];
@@ -97,10 +199,6 @@ public class CryptoHandler {
 			fos.close();
 			fis.close();
 			
-			System.out.println(t.stopTimer());
-			Log.i("MY", String.format("%d ms ENCRYPT", t.stopTimer()));
-			
-			t.startTimer();
 			/// DECRYPT ///
 			FileInputStream fis2 = new FileInputStream(new File(sdCard, "TEST/enc"));
 			FileOutputStream fos2 = new FileOutputStream(new File(sdCard, "TEST/20MB2.zip"));
@@ -134,5 +232,6 @@ public class CryptoHandler {
 			e.printStackTrace();
 		}
 	}
+	*/
 }
 	
