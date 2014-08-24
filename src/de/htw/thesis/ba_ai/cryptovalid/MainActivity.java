@@ -1,22 +1,13 @@
 package de.htw.thesis.ba_ai.cryptovalid;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.security.Provider;
 import java.security.Security;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
-
-import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.view.Menu;
 import android.widget.TextView;
@@ -25,112 +16,64 @@ import de.htw.thesis.ba_ai.cryptoprovider.R;
 
 
 public class MainActivity extends Activity {
-
-	private List<String> files;
-	private DataHandler dataHandler;
-	private CryptoHandler cryptoHandler;
-
 	
+	private MainRunner t;
+	private TextView tv;
+	private boolean threadIsWaiting, threadIsRunning;
+		
+	public Handler myHandler = new Handler() {
+
+		@Override
+		public void handleMessage(Message msg) {
+			tv.setText(msg.getData().getCharSequence("VALID").toString());
+			super.handleMessage(msg);
+		}
+		
+	};
+	
+	@Override
+	protected void onPause() {
+			try {
+				synchronized (t) {
+					t.wait();
+				}
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			threadIsWaiting = true;
+		super.onPause();
+	}
+
+	@Override
+	protected void onResume() {
+		
+		if (!threadIsRunning)
+		{
+			t.start();
+			threadIsRunning = true;
+		}
+		
+		if (threadIsWaiting)
+		{
+			synchronized (t) {
+				t.notify();
+			}
+			threadIsWaiting = false;
+		}
+		super.onResume();
+	}
+
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
-
-		File sdCard = Environment.getExternalStorageDirectory();
-		File fileOutput = new File(sdCard, "TEST/LogFile.txt");
-		FileWriter fw = null;
-
-		try {
-			fw = new FileWriter(fileOutput);
-		} catch (IOException e1) {
-			e1.printStackTrace();
-		}
-
-		if (!fileOutput.exists()) {
-			try {
-				fileOutput.createNewFile();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-
-		dataHandler = new DataHandler();
-		cryptoHandler = new CryptoHandler();
-
-		files = new ArrayList<String>();
-		files.add("1MB.txt");
-		files.add("5MB.zip");
-		files.add("20MB.zip");
-
-		List<IvParameterSpec> usedIvs = new ArrayList<IvParameterSpec>();
-		int[] AESkeySizes = { 128, 192, 256 };
-		int[] BlowfishKeySizes = { 128, 256, 448 };
+		tv = (TextView)findViewById(R.id.textView);
 				
-		String[] blockCipherAlgorithms = { "AES" , "Blowfish" };
-		String[] modesAndPadding = { "CBC/PKCS7Padding", "OFB/NoPadding","CFB/NoPadding", "CTR/NoPadding" };
-
-		try {
-			for (int m = 0; m < blockCipherAlgorithms.length; m++) {
-				for (int k = 0; k < modesAndPadding.length; k++) {
-							
-					int[] keySizes;
-					boolean needIV;
-					if (blockCipherAlgorithms[m].equals("AES"))
-					{
-						keySizes = AESkeySizes;
-						needIV = true;
-					}
-					else
-					{
-						keySizes = BlowfishKeySizes;
-						needIV = false;
-					}
-					
-					for (int j = 0; j < keySizes.length; j++) {
-						for (int i = 0; i < files.size(); i++) {
-
-							int iterations = files.get(i).length() <= 8 ? 10 : 5;
-							SecretKey key = cryptoHandler.generateBlockCipherKey(blockCipherAlgorithms[m],keySizes[j]);
-
-							for (int l = 0; l < iterations; l++) {
-								dataHandler.Start();
-								
-								if (needIV)
-									usedIvs.add(cryptoHandler.encryptBlockCipherWithIV(blockCipherAlgorithms[m],modesAndPadding[k],files.get(i), key));
-								else
-									cryptoHandler.encryptBlockCipherWihtoutIV(blockCipherAlgorithms[m], modesAndPadding[k], files.get(i), key);
-								
-								Log.i("VALID", String.format("%s: %s%d/%s ENC : %s", files.get(i).split("\\.")[0], blockCipherAlgorithms[m],keySizes[j], modesAndPadding[k],dataHandler.getData(this)));
-								fw.append(String.format("%s: %s%d/%s ENC : %s\r\n",files.get(i).split("\\.")[0], blockCipherAlgorithms[m],keySizes[j], modesAndPadding[k],dataHandler.getData(this)));
-								fw.flush();
-							}
-							for (int l = 0; l < iterations; l++) {
-								dataHandler.Start();
-								
-								if (needIV)
-									cryptoHandler.decryptBlockCipherWithIV(blockCipherAlgorithms[m],modesAndPadding[k], files.get(i), key,usedIvs.get(l));
-								else
-									cryptoHandler.decryptBlockCipherWihtoutIV(blockCipherAlgorithms[m], modesAndPadding[k], files.get(i), key);
-									
-								Log.i("VALID", String.format("%s: %s%d/%s DEC : %s", files.get(i).split("\\.")[0], blockCipherAlgorithms[m],keySizes[j], modesAndPadding[k],dataHandler.getData(this)));
-								fw.append(String.format("%s: %s%d/%s DEC : %s\r\n",files.get(i).split("\\.")[0], blockCipherAlgorithms[m],keySizes[j], modesAndPadding[k],dataHandler.getData(this)));
-								fw.flush();
-							}
-						}
-					}
-				}
-			}
-			
-		} catch (Exception e) {
-			try {
-				fw.append(e.getMessage());
-				fw.flush();
-				fw.close();
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
-		}
+		t = new MainRunner(this);
+		t.setPriority(Thread.MAX_PRIORITY);
+		threadIsWaiting = false;
+		threadIsRunning = false;
 
 		/*
 		 * 
